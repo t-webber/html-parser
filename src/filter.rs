@@ -1,7 +1,9 @@
 //! Module to define structs to filter
 
+use std::cmp::Ordering;
 use std::collections::HashSet;
 
+use crate::errors::safe_unreachable;
 use crate::types::html::Html;
 use crate::types::tag::{Attribute, PrefixName, Tag};
 
@@ -28,6 +30,23 @@ macro_rules! filter_setter {
 pub struct Filter {
     /// Attributes of the wanted tags
     attrs: Option<HashSet<Attribute>>,
+    /// Depth in which to embed the required nodes
+    ///
+    /// # Examples
+    ///
+    /// If the html is `<nav><ul><li>Click on the <a
+    /// href="#">link</a><li></ul></nav>` and we search with the filter
+    ///
+    /// ```
+    /// Filter::default().depth(1).tag_name("a");
+    /// ```
+    ///
+    /// the expected output is `<li>Click on the <a href="#">link</a><li>`.
+    ///
+    /// - If the depth were 0, the output would have been only the `a` tag.
+    /// - If the depth were 2, the output would have been the whole the `ul`
+    ///   tag.
+    depth: usize,
     /// Html tags
     ///
     ///  # Examples
@@ -74,6 +93,7 @@ impl Filter {
         self
     }
 
+    //TODO: only works if either one if empty
     /// Method to check all the attributes are present.
     fn allowed_tag(&self, tag: &Tag) -> bool {
         self.tags
@@ -110,45 +130,168 @@ impl Filter {
     }
 }
 
+/// State to follow if the wanted nodes where found at what depth
+#[derive(Default, Debug)]
+enum DepthSuccess {
+    /// Not wanted node, doesn't respect the filters
+    #[default]
+    None,
+    Found(usize),
+    Success,
+}
+
+impl DepthSuccess {
+    fn incr(&mut self) {
+        if let Self::Found(depth) = self {
+            *depth += 1;
+        }
+    }
+
+    fn current(&self) -> Option<usize> {
+        if let Self::Found(depth) = self {
+            Some(*depth)
+        } else {
+            None
+        }
+    }
+}
+
+/// Status of the filtering on recursion calls
+#[derive(Default, Debug)]
+struct FilterSuccess {
+    /// Indicates if the filter found a wanted node
+    ///
+    /// Is
+    /// - `None` if no wanted node was found
+    /// - `Some(depth)` if a wanted node was found at depth `depth`. If there
+    ///   are embedded nodes that satisfy the filter, `depth` is the smallest
+    ///   possible.
+    depth: DepthSuccess,
+    /// Result of the filtering
+    html: Html,
+}
+
+impl FilterSuccess {
+    /// Creates a [`FilterSuccess`] from an [`Html`]
+    fn found(html: Html) -> Option<Self> {
+        Some(Self { depth: DepthSuccess::Found(0), html })
+    }
+
+    /// Increment the depth, if applicable
+    fn incr(mut self) -> Option<Self> {
+        self.depth.incr();
+        Some(self)
+    }
+
+    //
+    fn is_found(&self) -> bool {
+        !matches!(self.depth, DepthSuccess::None)
+    }
+}
+
 impl Html {
     /// Filters html based on a defined filter.
     #[inline]
     #[must_use]
     pub fn filter(self, filter: &Filter) -> Self {
-        self.filter_aux(filter, false)
+        self.filter_aux(filter).html
     }
 
     /// Wrapper for [`Self::filter`]
     ///
-    /// It takes an additional `clean` boolean to indicate when a tag returns
-    /// the child, the texts must disappear.
+    /// Refer to [`Self::filter`] for documentation.
+    ///
+    /// This methods takes an additional `clean` boolean to indicate when a tag
+    /// returns the child. In that case, the texts must disappear if present at
+    /// root.
+    ///
+    /// This methods returns a wrapper of the final html in a [`FilterSuccess`]
+    /// to follow the current depth of the last found node. See
+    /// [`FilterSuccess`] for more information.
     #[expect(clippy::ref_patterns, reason = "ref only on one branch")]
-    fn filter_aux(self, filter: &Filter, clean: bool) -> Self {
-        match self {
-            Self::Comment { .. } if !filter.types.comment => Self::default(),
-            Self::Document { .. } if !filter.types.document => Self::default(),
-            Self::Text(txt) if txt.chars().all(char::is_whitespace) => Self::default(),
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "incr depth when smaller than filter_depth"
+    )]
+    fn filter_aux(self, filter: &Filter) -> FilterSuccess {
+        let input: String = format!("{self:?}").chars().take(100).collect();
+        let output = match self {
+            Self::Comment { .. } if !filter.types.comment => None,
+            Self::Document { .. } if !filter.types.document => None,
+            Self::Text(txt) if txt.chars().all(char::is_whitespace) => None,
 
-            Self::Tag { ref tag, .. } if filter.allowed_tag(tag) => self,
-            Self::Tag { child, .. } => child.filter_aux(filter, true),
-            Self::Vec(vec) => {
-                let mut filtered_vec = Vec::with_capacity(vec.len());
-                for child in vec {
-                    let filtered_child = child.filter(filter);
-                    if !filtered_child.is_empty()
-                        && (!clean || !matches!(filtered_child, Self::Text(_)))
-                    {
-                        filtered_vec.push(filtered_child);
-                    }
-                }
-                if filtered_vec.len() <= 1 {
-                    filtered_vec.pop().unwrap_or_default()
-                } else {
-                    Self::Vec(filtered_vec)
+            Self::Tag { ref tag, .. } if filter.allowed_tag(tag) => FilterSuccess::found(self),
+            Self::Tag { child, .. } if filter.depth == 0 => child.filter_aux(filter).incr(),
+            Self::Tag { child, tag, full } => {
+                let rec = child.filter_aux(filter);
+                match rec.depth {
+                    DepthSuccess::None => None,
+                    DepthSuccess::Success => Some(rec),
+                    DepthSuccess::Found(depth) => match depth.cmp(&filter.depth) {
+                        Ordering::Less => Some(FilterSuccess {
+                            depth: DepthSuccess::Found(depth + 1),
+                            html: Self::Tag { tag, full, child: Box::new(rec.html) },
+                        }),
+                        Ordering::Equal => match rec.html {
+                            Self::Tag { .. } =>    Some(FilterSuccess { depth: DepthSuccess::Success, html: rec.html }),
+                            Self::Vec(_) => Some(FilterSuccess {
+                                depth: DepthSuccess::Found(depth + 1),
+                                html: Self::Tag { tag, full, child: Box::new(rec.html) },
+                            }),
+                                Self::Empty
+                            | Self::Text(_)
+                            | Self::Comment { .. }
+                            | Self::Document { .. } => safe_unreachable("filter depth is not 0"),
+                        },
+                        Ordering::Greater =>
+                            Some(FilterSuccess { depth: DepthSuccess::Success, html: rec.html }),
+                    },
                 }
             }
-            Self::Comment { .. } | Self::Document { .. } | Self::Empty | Self::Text(_) => self,
+
+            Self::Vec(vec) => {
+                let filtered_vec = vec
+                    .into_iter()
+                    .map(|child| child.filter_aux(filter))
+                    .filter(|child| !child.html.is_empty())
+                    .collect::<Vec<_>>();
+                filtered_vec
+                    .iter()
+                    .filter_map(|child| child.depth.current())
+                    .min()
+                    .map(|depth| FilterSuccess {
+                        depth: if depth < filter.depth {
+                            DepthSuccess::Found(depth + 1)
+                        } else {
+                            DepthSuccess::Success
+                        },
+                        html: Self::Vec({let vec = if depth < filter.depth {
+                            filtered_vec.into_iter().map(|child| child.html).collect()
+                        } else {
+                            filtered_vec
+                                .into_iter()
+                                .filter(FilterSuccess::is_found)
+                                .map(|child| child.html)
+                                .collect()
+                        }; if vec.len()<= 1 {
+                            vec.pop().unwrap_or_default()
+                        } else {
+                            vec
+                        }}),
+                    })
+            }
+
+            Self::Text(_) => Some(FilterSuccess{html:self, depth: DepthSuccess::None }),
+            Self::Empty => None, 
+            Self::Comment { .. } | Self::Document { .. }  =>
+                FilterSuccess::found(self),
         }
+        .unwrap_or_default();
+        let oustr: String = format!("{output:?}").chars().take(100).collect();
+        println!(
+            "----------------------------------------\n{input}\n\t=>\n{oustr}\n----------------------------------------"
+        );
+        output
     }
 
     /// Filters html based on a defined filter.

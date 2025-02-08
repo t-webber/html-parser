@@ -4,3 +4,4 @@
 !.git*
 *.html
 !tests/data/*.html
+debug.rs
