@@ -12,7 +12,7 @@ macro_rules! test_find {
                 let content = read_to_string("tests/data/index.html").unwrap();
                 let tree = parse_html(&content).unwrap_or_else(|err| panic!("{err}")).find(&$filter);
                 if let Some(tree) = tree {
-                    test_maker(stringify!($name), $expect, tree)
+                    test_maker(stringify!($name), $expect, tree, $filter)
                 } else {
                     panic!("No matching element corresponding to the given filters.")
                 }

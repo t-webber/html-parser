@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::fs;
 
 use html_parser::prelude::*;
@@ -24,7 +25,7 @@ fn format_html(html: &str) -> String {
     old
 }
 
-fn test_maker(name: &str, expected: &str, output: Html) {
+fn test_maker<T: Debug>(name: &str, expected: &str, output: Html, msg: T) {
     let formatted_input = format_html(expected);
     let formatted_output = format_html(&output.to_string());
     if formatted_output != formatted_input {
@@ -35,7 +36,7 @@ fn test_maker(name: &str, expected: &str, output: Html) {
         fs::write(&expected_path, &formatted_input)
             .expect("Permission denied: failed to write to directory.");
         panic!(
-            "Error occurred.\nOutput:\n--------------------\n{formatted_output}\n--------------------\nUse `diff {output_path} {expected_path}` to see the problem."
+            "Error occurred.\n{msg:?}\nOutput:\n--------------------\n{formatted_output}\n--------------------\nUse `diff {output_path} {expected_path}` to see the problem."
         );
     }
 }

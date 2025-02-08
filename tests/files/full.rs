@@ -8,5 +8,5 @@ use super::test_maker;
 fn index() {
     let content = read_to_string("tests/data/index.html").unwrap();
     let tree = parse_html(&content).unwrap_or_else(|err| panic!("{err}"));
-    test_maker("full", &content, tree);
+    test_maker("full", &content, tree, "");
 }
