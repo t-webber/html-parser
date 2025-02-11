@@ -196,13 +196,55 @@ impl FilterSuccess {
         Some(self)
     }
 
-    /// Checks if the returns [`Html`] respected the filters
-    const fn is_found(&self) -> bool {
-        !matches!(self.depth, DepthSuccess::None)
-    }
+    // /// Checks if the returns [`Html`] respected the filters
+    // const fn is_found(&self) -> bool {
+    //     !matches!(self.depth, DepthSuccess::None)
+    // }
 }
 
 impl Html {
+    /// Method to check if a wanted node is visible
+    ///
+    /// This methods stop checking after a maximum depth, as the current node
+    /// will be discarded if it is deeper in the tree.
+    // TODO: users can implement this an be disapointed
+    fn check_depth(&self, max_depth: usize, filter: &Filter) -> Option<usize> {
+        match self {
+            Self::Empty | Self::Text(_) => None,
+            Self::Comment { .. } => filter.types.comment.then_some(0),
+            Self::Document { .. } => filter.types.document.then_some(0),
+            Self::Tag { tag, .. } if filter.allowed_tag(tag) => Some(0),
+            Self::Tag { .. } | Self::Vec(_) if max_depth == 0 => None,
+            Self::Tag { child, .. } => child
+                .check_depth(
+                    #[expect(clippy::arithmetic_side_effects, reason = "non-0")]
+                    {
+                        max_depth - 1
+                    },
+                    filter,
+                )
+                .map(
+                    #[expect(clippy::arithmetic_side_effects, reason = "< initial max_depth")]
+                    |depth| depth + 1,
+                ),
+            Self::Vec(vec) => vec
+                .iter()
+                .try_fold(Some(usize::MAX), |acc, child| {
+                    if acc == Some(0) {
+                        Err(())
+                    } else {
+                        #[expect(clippy::arithmetic_side_effects, reason = "non-0")]
+                        Ok(child.check_depth(max_depth - 1, filter))
+                    }
+                })
+                .unwrap_or(Some(0))
+                .map(
+                    #[expect(clippy::arithmetic_side_effects, reason = "< initial max_depth")]
+                    |depth| depth + 1,
+                ),
+        }
+    }
+
     /// Filters html based on a defined filter.
     #[inline]
     #[must_use]
@@ -227,7 +269,7 @@ impl Html {
         reason = "incr depth when smaller than filter_depth"
     )]
     fn filter_aux(self, filter: &Filter) -> FilterSuccess {
-        // let input: String = format!("{self:?}").chars().take(100).collect();
+        let input: String = format!("{self:?}").chars().take(100).collect();
         let output = match self {
             Self::Comment { .. } if !filter.types.comment => None,
             Self::Document { .. } if !filter.types.document => None,
@@ -261,34 +303,73 @@ impl Html {
             }
 
             Self::Vec(vec) => {
-                let filtered_vec = vec
-                    .into_iter()
-                    .map(|child| child.filter_aux(filter))
-                    .filter(|child| !child.html.is_empty())
-                    .collect::<Vec<_>>();
-                filtered_vec
+                match vec
                     .iter()
-                    .map(|child| child.depth)
+                    .filter_map(|child| child.check_depth(filter.depth, filter))
                     .min()
-                    .map(|depth| FilterSuccess {
-                        depth: depth.incr(),
-                        html: {
-                            let mut filtered: Vec<Self> = if depth.lt(filter.depth) {
-                                filtered_vec.into_iter().map(|child| child.html).collect()
-                            } else {
-                                filtered_vec
-                                    .into_iter()
-                                    .filter(FilterSuccess::is_found)
-                                    .map(|child| child.html)
-                                    .collect()
-                            };
-                            if filtered.len() <= 1 {
-                                filtered.pop().unwrap_or_default()
-                            } else {
-                                Self::Vec(filtered)
-                            }
-                        },
-                    })
+                {
+                    Some(depth) if depth < filter.depth => Some(FilterSuccess {
+                        depth: DepthSuccess::Found(depth),
+                        html: Self::Vec(vec),
+                    }),
+                    Some(_) => Some(FilterSuccess {
+                        depth: DepthSuccess::Success,
+                        html: Self::Vec(
+                            vec.into_iter()
+                                .map(|child| child.filter_aux(filter))
+                                .filter(|child| !child.html.is_empty())
+                                .map(|child| child.html)
+                                .collect::<Vec<_>>(),
+                        ),
+                    }),
+                    None => {
+                        let mut filtered = vec
+                            .into_iter()
+                            .map(|child| child.filter_aux(filter))
+                            .filter(|node| {
+                                !node.html.is_empty() || matches!(node.depth, DepthSuccess::None)
+                            })
+                            .collect::<Vec<FilterSuccess>>();
+                        if filtered.len() <= 1 {
+                            filtered.pop()
+                        } else {
+                            filtered.iter().map(|child| child.depth).min().map(|depth| {
+                                FilterSuccess {
+                                    depth,
+                                    html: Self::Vec(
+                                        filtered.into_iter().map(|child| child.html).collect(),
+                                    ),
+                                }
+                            })
+                        }
+                    } /*     FilterSuccess {
+                       *     depth,
+                       *     html: {
+                       *         let filtered_vec = vec
+                       *             .into_iter()
+                       *             .map(|child| child.filter_aux(filter))
+                       *             .filter(|child| !child.html.is_empty())
+                       *             .collect::<Vec<_>>();
+                       *         let mut filtered: Vec<Self> = if
+                       * depth.lt(filter.depth) {
+                       * println!("all");
+                       * filtered_vec.into_iter().map(|child|
+                       * child.html).collect()         } else {
+                       *             println!("not all");
+                       *             filtered_vec
+                       *                 .into_iter()
+                       *                 .filter(FilterSuccess::is_found)
+                       *                 .map(|child| child.html)
+                       *                 .collect()
+                       *         };
+                       *         if filtered.len() <= 1 {
+                       *             filtered.pop().unwrap_or_default()
+                       *         } else {
+                       *             Self::Vec(filtered)
+                       *         }
+                       *     },
+                       * }) */
+                }
             }
 
             Self::Text(_) => Some(FilterSuccess { html: self, depth: DepthSuccess::None }),
@@ -296,10 +377,13 @@ impl Html {
             Self::Comment { .. } | Self::Document { .. } => FilterSuccess::found(self),
         }
         .unwrap_or_default();
-        // let out: String = format!("{output:?}").chars().take(100).collect();
-        // println!(
-        //     "----------------------------------------\n{input}\n\t=>\n{out}\
-        // n----------------------------------------" );
+        let out: String = format!("{output:?}").chars().take(50).collect();
+        println!(
+            "----------------------------------------
+{input}\n\t=>\n{out}\n{}
+----------------------------------------",
+            output.html
+        );
         output
     }
 

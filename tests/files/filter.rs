@@ -53,14 +53,15 @@ r#"
 filter_tr: Filter::default().tag_name("tr") =>
 "<tr><th>ID</th><th>Name</th></tr><tr><td>1</td><td>Alice</td></tr><tr><td>2</td><td>Bob</td></tr>"
 
-ul_depth: Filter::default().depth(1).tag_name("li") =>
+ul_depth: Filter::default().depth(2).tag_name("source") =>
 r##"
-<ul>
-    <li><a xlink:href="#">About</a></li>
-    <li>
-        <a href="#">Contact<br> us</a>
-    </li>
-</ul>
+<section>
+    <h2>Media</h2>
+    <img src="test.jpg" alt="Test Image" />
+    <video controls>
+        <source src="test.mp4" type="video/mp4" />
+    </video>
+</section>
 "##
 
 );
