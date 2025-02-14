@@ -53,14 +53,14 @@ r#"
 filter_tr: Filter::default().tag_name("tr") =>
 "<tr><th>ID</th><th>Name</th></tr><tr><td>1</td><td>Alice</td></tr><tr><td>2</td><td>Bob</td></tr>"
 
-filter_1: Filter::default().depth(1).tag_name("source") =>
+depth_1: Filter::default().depth(1).tag_name("source") =>
 r##"
 <video controls>
     <source src="test.mp4" type="video/mp4" />
 </video>
 "##
 
-ul_depth: Filter::default().depth(2).tag_name("source") =>
+depth_2: Filter::default().depth(2).tag_name("source") =>
 r##"
 <section>
     <h2>Media</h2>
@@ -68,6 +68,28 @@ r##"
     <video controls>
         <source src="test.mp4" type="video/mp4" />
     </video>
+</section>
+"##
+
+depth_multiple: Filter::default().depth(1).attribute_name("enabled") =>
+r##"
+<form action="#" method="post">
+    <input type="sub\mit" id="name" name="name" />
+    <input type='sub"mit' value="Submit" />
+    <!-- prettier-ignore -->
+    <button enabled/>
+</form>
+<section>
+    <h2>Lists</h2>
+    <ul>
+        <li>Item 1</li>
+        <li>Item 2</li>
+    </ul>
+    <ol>
+        <li>First</li>
+        <li>Second</li>
+    </ol>
+    <input enabled />
 </section>
 "##
 

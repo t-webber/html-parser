@@ -227,8 +227,8 @@ pub struct Tag {
 impl fmt::Display for Tag {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.name)
-            .and_then(|()| self.attrs.iter().try_for_each(|attr| attr.fmt(f)))
+        f.write_str(&self.name)?;
+        self.attrs.iter().try_for_each(|attr| attr.fmt(f))
     }
 }
 
