@@ -39,7 +39,7 @@ let html: &str = r#"
 "#;
 
 // Parse your html
-let tree: Html = parse_html(&html).expect("Invalid HTML");
+let tree: Html = parse_html(html).expect("Invalid HTML");
 
 // Now you can use it!
 assert!(format!("{tree}") == html);
@@ -72,7 +72,7 @@ let html: &str = r##"
 let filter = Filter::default().tag_name("li");
 
 // Parse your html
-let filtered_tree: Html = parse_html(&html).expect("Invalid HTML").filter(&filter);
+let filtered_tree: Html = parse_html(html).expect("Invalid HTML").filter(&filter);
 
 // Check the result: filtered_tree contains the 4 lis from the above html string
 if let Html::Vec(links) = filtered_tree {
@@ -107,7 +107,7 @@ let html: &str = r##"
 let filter = Filter::default().tag_name("a");
 
 // Parse your html
-let link: Html = parse_html(&html).expect("Invalid HTML").find(&filter).expect("No `a` tags");
+let link: Html = parse_html(html).expect("Invalid HTML").find(&filter).expect("No `a` tags");
 
 // Check the result: link contains `<a href="/home">Home</a>`
 if let Html::Tag { tag, child, .. } = link {

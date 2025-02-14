@@ -233,15 +233,10 @@ impl Html {
                     if acc == Some(0) {
                         Err(())
                     } else {
-                        #[expect(clippy::arithmetic_side_effects, reason = "non-0")]
-                        Ok(child.check_depth(max_depth - 1, filter))
+                        Ok(child.check_depth(max_depth, filter))
                     }
                 })
-                .unwrap_or(Some(0))
-                .map(
-                    #[expect(clippy::arithmetic_side_effects, reason = "< initial max_depth")]
-                    |depth| depth + 1,
-                ),
+                .unwrap_or(Some(0)),
         }
     }
 
@@ -279,6 +274,7 @@ impl Html {
             Self::Tag { child, .. } if filter.depth == 0 => child.filter_aux(filter).incr(),
             Self::Tag { child, tag, full } => {
                 let rec = child.filter_aux(filter);
+                println!("on tag, depth = {:?}", rec.depth);
                 match rec.depth {
                     DepthSuccess::None => None,
                     DepthSuccess::Success => Some(rec),
@@ -288,14 +284,17 @@ impl Html {
                             html: Self::Tag { tag, full, child: Box::new(rec.html) },
                         }),
                         Ordering::Equal =>
-                            if matches!(rec.html, Self::Tag { .. }) {
+                            // if matches!(rec.html, Self::Tag { .. }) {
                                 Some(FilterSuccess { depth: DepthSuccess::Success, html: rec.html })
-                            } else {
-                                Some(FilterSuccess {
-                                    depth: DepthSuccess::Found(depth + 1),
-                                    html: Self::Tag { tag, full, child: Box::new(rec.html) },
-                                })
-                            },
+                                // } else {
+                                //     Some(FilterSuccess {
+                                //         depth: DepthSuccess::Found(depth +
+                                // 1),
+                                //         html: Self::Tag { tag, full, child:
+                                // Box::new(rec.html) },
+                                //     })
+                                // },
+                            ,
                         Ordering::Greater =>
                             Some(FilterSuccess { depth: DepthSuccess::Success, html: rec.html }),
                     },
@@ -303,37 +302,48 @@ impl Html {
             }
 
             Self::Vec(vec) => {
-                match vec
-                    .iter()
-                    .filter_map(|child| child.check_depth(filter.depth, filter))
-                    .min()
+                let mut arm = 0;
+                let res = match dbg!(
+                    vec.iter()
+                        .filter_map(|child| child.check_depth(filter.depth + 1, filter))
+                        .collect::<Vec<_>>()
+                )
+                .iter()
+                .min()
                 {
-                    Some(depth) if depth < filter.depth => Some(FilterSuccess {
-                        depth: DepthSuccess::Found(depth),
-                        html: Self::Vec(vec),
-                    }),
-                    Some(_) => Some(FilterSuccess {
-                        depth: DepthSuccess::Success,
-                        html: Self::Vec(
-                            vec.into_iter()
-                                .map(|child| child.filter_aux(filter))
-                                .filter(|child| !child.html.is_empty())
-                                .map(|child| child.html)
-                                .collect::<Vec<_>>(),
-                        ),
-                    }),
+                    Some(depth) if *depth < filter.depth => {
+                        arm = 1;
+                        Some(FilterSuccess {
+                            depth: DepthSuccess::Found(*depth),
+                            html: Self::Vec(vec),
+                        })
+                    }
+                    Some(_) => {
+                        arm = 2;
+                        Some(FilterSuccess {
+                            depth: DepthSuccess::Success,
+                            html: Self::Vec(
+                                vec.into_iter()
+                                    .map(|child| child.filter_aux(filter))
+                                    .filter(|child| !child.html.is_empty())
+                                    .map(|child| child.html)
+                                    .collect::<Vec<_>>(),
+                            ),
+                        })
+                    }
                     None => {
+                        arm = 3;
+                        println!("rec on vec");
                         let mut filtered = vec
                             .into_iter()
                             .map(|child| child.filter_aux(filter))
-                            .filter(|node| {
-                                !node.html.is_empty() || matches!(node.depth, DepthSuccess::None)
-                            })
+                            .filter(|node| !node.html.is_empty())
                             .collect::<Vec<FilterSuccess>>();
                         if filtered.len() <= 1 {
                             filtered.pop()
                         } else {
                             filtered.iter().map(|child| child.depth).min().map(|depth| {
+                                println!("on a d = {depth:?}!!!!!!!!!!!!!!!!!!");
                                 FilterSuccess {
                                     depth,
                                     html: Self::Vec(
@@ -342,47 +352,48 @@ impl Html {
                                 }
                             })
                         }
-                    } /*     FilterSuccess {
-                       *     depth,
-                       *     html: {
-                       *         let filtered_vec = vec
-                       *             .into_iter()
-                       *             .map(|child| child.filter_aux(filter))
-                       *             .filter(|child| !child.html.is_empty())
-                       *             .collect::<Vec<_>>();
-                       *         let mut filtered: Vec<Self> = if
-                       * depth.lt(filter.depth) {
-                       * println!("all");
-                       * filtered_vec.into_iter().map(|child|
-                       * child.html).collect()         } else {
-                       *             println!("not all");
-                       *             filtered_vec
-                       *                 .into_iter()
-                       *                 .filter(FilterSuccess::is_found)
-                       *                 .map(|child| child.html)
-                       *                 .collect()
-                       *         };
-                       *         if filtered.len() <= 1 {
-                       *             filtered.pop().unwrap_or_default()
-                       *         } else {
-                       *             Self::Vec(filtered)
-                       *         }
-                       *     },
-                       * }) */
-                }
+                    }
+                };
+                println!("arm = {arm}");
+                res
+                /*     FilterSuccess {
+                 *     depth,
+                 *     html: {
+                 *         let filtered_vec = vec
+                 *             .into_iter()
+                 *             .map(|child| child.filter_aux(filter))
+                 *             .filter(|child| !child.html.is_empty())
+                 *             .collect::<Vec<_>>();
+                 *         let mut filtered: Vec<Self> = if
+                 * depth.lt(filter.depth) {
+                 * println!("all");
+                 * filtered_vec.into_iter().map(|child|
+                 * child.html).collect()         } else {
+                 *             println!("not all");
+                 *             filtered_vec
+                 *                 .into_iter()
+                 *                 .filter(FilterSuccess::is_found)
+                 *                 .map(|child| child.html)
+                 *                 .collect()
+                 *         };
+                 *         if filtered.len() <= 1 {
+                 *             filtered.pop().unwrap_or_default()
+                 *         } else {
+                 *             Self::Vec(filtered)
+                 *         }
+                 *     },
+                 * }) */
             }
 
-            Self::Text(_) => Some(FilterSuccess { html: self, depth: DepthSuccess::None }),
-            Self::Empty => None,
+            Self::Text(_) | Self::Empty => None,
             Self::Comment { .. } | Self::Document { .. } => FilterSuccess::found(self),
         }
         .unwrap_or_default();
-        let out: String = format!("{output:?}").chars().take(50).collect();
         println!(
             "----------------------------------------
-{input}\n\t=>\n{out}\n{}
+{input}\n=>\nDepth = {:?}\n{}
 ----------------------------------------",
-            output.html
+            output.depth, output.html
         );
         output
     }

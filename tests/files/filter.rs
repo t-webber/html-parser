@@ -53,6 +53,13 @@ r#"
 filter_tr: Filter::default().tag_name("tr") =>
 "<tr><th>ID</th><th>Name</th></tr><tr><td>1</td><td>Alice</td></tr><tr><td>2</td><td>Bob</td></tr>"
 
+filter_1: Filter::default().depth(1).tag_name("source") =>
+r##"
+<video controls>
+    <source src="test.mp4" type="video/mp4" />
+</video>
+"##
+
 ul_depth: Filter::default().depth(2).tag_name("source") =>
 r##"
 <section>
