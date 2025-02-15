@@ -7,6 +7,7 @@
 //! For more information on how to define the filtering rules, please refer to
 //! [`Filter`].
 
+mod element;
 pub mod types;
 
 use core::cmp::Ordering;
@@ -94,7 +95,7 @@ impl Html {
     ///
     /// This methods stop checking after a maximum depth, as the current node
     /// will be discarded if it is deeper in the tree.
-    // TODO: users can implement this an be disapointed
+    // TODO: users can implement this an be disappointed
     fn check_depth(&self, max_depth: usize, filter: &Filter) -> Option<usize> {
         match self {
             Self::Empty | Self::Text(_) | Self::Comment { .. } | Self::Document { .. } => None,

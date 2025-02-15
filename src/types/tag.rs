@@ -74,7 +74,7 @@ impl Attribute {
     }
 
     /// Returns the name of an attribute
-    const fn as_name(&self) -> &PrefixName {
+    pub const fn as_name(&self) -> &PrefixName {
         match self {
             Self::NameNoValue(prefix_name) => prefix_name,
             Self::NameValue { name, .. } => name,
@@ -82,7 +82,7 @@ impl Attribute {
     }
 
     /// Returns the value of an attribute
-    const fn as_value(&self) -> Option<&String> {
+    pub const fn as_value(&self) -> Option<&String> {
         match self {
             Self::NameNoValue(_) => None,
             Self::NameValue { value, .. } => Some(value),
@@ -256,7 +256,7 @@ impl fmt::Display for PrefixName {
 /// ```
 #[expect(
     clippy::field_scoped_visibility_modifiers,
-    reason = "use methods for API but visiblity needed by parser"
+    reason = "use methods for API but visibility needed by parser"
 )]
 #[derive(Default, Debug)]
 pub struct Tag {

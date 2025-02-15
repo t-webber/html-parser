@@ -1,8 +1,7 @@
 //! Module to define structs to filter
 
-use std::collections::HashSet;
-
-use crate::types::tag::{Attribute, PrefixName, Tag};
+use super::element::ElementFilter;
+use crate::types::tag::Tag;
 
 /// Filters to select the wanted elements of an Html tree.
 ///
@@ -32,8 +31,13 @@ use crate::types::tag::{Attribute, PrefixName, Tag};
 #[non_exhaustive]
 #[derive(Default, Debug)]
 pub struct Filter {
-    /// Attributes of the wanted tags
-    attrs: Option<HashSet<Attribute>>,
+    /// Attributes of tags
+    ///
+    /// This contains the list of attributes that ought to be kept in the final
+    /// html tree, but also those that ought to be remove from the final.
+    ///
+    /// This includes attributes with or without values.
+    attrs: ElementFilter<Option<String>>,
     /// Depth in which to embed the required nodes
     ///
     /// # Examples
@@ -55,11 +59,14 @@ pub struct Filter {
     depth: usize,
     /// Html tags
     ///
+    /// This contains the list of tags that ought to be kept in the final html
+    /// tree, but also those that ought to be remove from the final html.
+    ///
     ///  # Examples
     ///
     /// `<a href="link" />`
-    tags: Option<HashSet<String>>,
-    /// Filter by type of html node
+    tags: ElementFilter<()>,
+    /// Filter by type of html node.
     types: HtmlFilterType,
 }
 
@@ -86,14 +93,17 @@ impl Filter {
 
     /// Checks if a given tag must be kept according to the filter..
     pub(super) fn tag_allowed(&self, tag: &Tag) -> bool {
-        let exception = match (self.tags.as_ref(), self.attrs.as_ref()) {
-            (None, None) => false,
-            (tags, attrs) =>
-                tags.is_none_or(|names| names.contains(&tag.name))
-                    && attrs.is_none_or(|wanted| wanted.iter().all(|attr| tag.attrs.contains(attr))),
-        };
-        // self.types.tag ^ exception
-        exception
+        dbg!(tag);
+        tag.attrs
+            .iter()
+            .fold(self.tags.check(&tag.name, &|()| true, true), |acc, attr| {
+                acc.and(&dbg!(self.attrs.check(
+                    &dbg!(attr.as_name().to_string()),
+                    &|target| { target.as_ref() == attr.as_value() },
+                    false
+                )))
+            })
+            .is_explicitly_authorised()
     }
 
     /// Checks if texts must be kept according to the filter.
@@ -116,14 +126,7 @@ impl Filter {
     ///
     /// See [`Filter`] for usage information.
     pub fn attribute_name<N: Into<String>>(mut self, name: N) -> Self {
-        let attr = Attribute::NameNoValue(PrefixName::from(name.into()));
-        if let Some(attrs) = &mut self.attrs {
-            attrs.insert(attr);
-        } else {
-            let mut hash_set = HashSet::new();
-            hash_set.insert(attr);
-            self.attrs = Some(hash_set);
-        }
+        self.attrs.push(name.into(), None, true);
         self
     }
 
@@ -136,18 +139,7 @@ impl Filter {
     ///
     /// See [`Filter`] for usage information.
     pub fn attribute_value<N: Into<String>, V: Into<String>>(mut self, name: N, value: V) -> Self {
-        let attr = Attribute::NameValue {
-            name: PrefixName::from(name.into()),
-            value: value.into(),
-            double_quote: true,
-        };
-        if let Some(attrs) = &mut self.attrs {
-            attrs.insert(attr);
-        } else {
-            let mut hash_set = HashSet::new();
-            hash_set.insert(attr);
-            self.attrs = Some(hash_set);
-        }
+        self.attrs.push(name.into(), Some(value.into()), true);
         self
     }
 
@@ -295,13 +287,7 @@ impl Filter {
     ///
     /// See [`Filter`] for usage information.
     pub fn tag_name<N: Into<String>>(mut self, name: N) -> Self {
-        if let Some(names) = &mut self.tags {
-            names.insert(name.into());
-        } else {
-            let mut names = HashSet::new();
-            names.insert(name.into());
-            self.tags = Some(names);
-        }
+        self.tags.push(name.into(), (), true);
         self
     }
 
@@ -337,12 +323,6 @@ pub(super) struct HtmlFilterType {
     ///
     /// `<!-- some comment -->`
     pub document: bool,
-    // /// Html tags
-    // ///
-    // /// # Examples
-    // ///
-    // /// `<p>`, `<a />` or `<br>`
-    // tag: bool,
     /// Html text node
     ///
     /// # Examples
