@@ -34,8 +34,14 @@ r#"<input radio type="radio" name="radio" id="radio1" /><input radio type="radio
 filter_radio_id: Filter::new().attribute_value("type", "radio").attribute_value("id", "radio2") =>
 r#"<input radio type="radio" name="radio" id="radio2" />"#
 
+filter_radio_id_except: Filter::new().attribute_value("type", "radio").except_attribute_value("id", "radio2") =>
+r#"<input radio type="radio" name="radio" id="radio1" />"#
+
 filter_enabled: Filter::new().attribute_name("enabled") =>
 "<button enabled /><input enabled />"
+
+filter_input_enabled: Filter::new().attribute_name("enabled").except_tag_name("button") =>
+"<input enabled />"
 
 filter_button_enabled: Filter::new().tag_name("button").attribute_name("enabled") =>
 "<button enabled />"
@@ -49,6 +55,16 @@ r#"
 <input type="checkbox" id="check" />
 <input radio type="radio" name="radio" id="radio1" />
 <input radio type="radio" name="radio" id="radio2" />
+<input type="date" />
+<input type="file" />
+"#
+
+filter_non_radio_input: Filter::new().except_attribute_name("radio").tag_name("input") =>
+r#"
+<input type="sub\mit" id="name" name="name" />
+<input type='sub"mit' value="Submit" />
+<input enabled />
+<input type="checkbox" id="check" />
 <input type="date" />
 <input type="file" />
 "#

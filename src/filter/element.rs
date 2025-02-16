@@ -14,7 +14,15 @@ use std::collections::HashMap;
 /// It contains a `whitelist` and a `blacklist` to keep track of the filtering
 /// parameters.
 #[derive(Debug)]
-pub struct ElementFilter<T>(HashMap<String, (T, bool)>);
+pub struct ElementFilter<T> {
+    /// Contains the elements and their status
+    ///
+    /// The hashmap maps a name to a target, and a bool. The boolean is `true`
+    /// if the item is whitelisted, and `false` if the item is blacklisted.
+    items: HashMap<String, (T, bool)>,
+    /// Indicates if a whitelisted element was pushed into the [`HashMap`].
+    whitelist_empty: bool,
+}
 
 impl<T: Eq + Hash> ElementFilter<T> {
     /// Check the status of an element
@@ -24,9 +32,9 @@ impl<T: Eq + Hash> ElementFilter<T> {
         test_value: &F,
         must_contain: bool,
     ) -> ElementState {
-        self.0.get(name).map_or_else(
+        self.items.get(name).map_or_else(
             || {
-                if must_contain && !self.0.is_empty() {
+                if must_contain && !self.whitelist_empty {
                     ElementState::BlackListed
                 } else {
                     ElementState::NotSpecified
@@ -42,13 +50,16 @@ impl<T: Eq + Hash> ElementFilter<T> {
 
     /// Pushes an element as whitelisted or blacklisted
     pub fn push(&mut self, name: String, value: T, keep: bool) {
-        self.0.insert(name, (value, keep));
+        self.items.insert(name, (value, keep));
+        if keep {
+            self.whitelist_empty = false;
+        }
     }
 }
 
 impl<T> Default for ElementFilter<T> {
     fn default() -> Self {
-        Self(HashMap::default())
+        Self { items: HashMap::new(), whitelist_empty: true }
     }
 }
 
@@ -83,15 +94,5 @@ impl ElementState {
     /// Checks if an element was explicitly authorised, i.e., is whitelisted
     pub const fn is_explicitly_authorised(&self) -> bool {
         matches!(self, Self::WhiteListed)
-    }
-}
-
-impl From<&bool> for ElementState {
-    fn from(value: &bool) -> Self {
-        if *value {
-            Self::WhiteListed
-        } else {
-            Self::BlackListed
-        }
     }
 }

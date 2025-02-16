@@ -70,6 +70,7 @@ pub struct Filter {
     types: HtmlFilterType,
 }
 
+/// Private methods for [`Filter`]
 impl Filter {
     /// Returns the wanted search depth
     pub(super) const fn as_depth(&self) -> usize {
@@ -93,15 +94,14 @@ impl Filter {
 
     /// Checks if a given tag must be kept according to the filter..
     pub(super) fn tag_allowed(&self, tag: &Tag) -> bool {
-        dbg!(tag);
         tag.attrs
             .iter()
             .fold(self.tags.check(&tag.name, &|()| true, true), |acc, attr| {
-                acc.and(&dbg!(self.attrs.check(
-                    &dbg!(attr.as_name().to_string()),
-                    &|target| { target.as_ref() == attr.as_value() },
-                    false
-                )))
+                acc.and(&self.attrs.check(
+                    &attr.as_name().to_string(),
+                    &|target| target.as_ref() == attr.as_value(),
+                    false,
+                ))
             })
             .is_explicitly_authorised()
     }
@@ -112,6 +112,7 @@ impl Filter {
     }
 }
 
+/// Public API for [`Filter`]
 impl Filter {
     #[inline]
     #[must_use]
@@ -259,6 +260,50 @@ impl Filter {
     /// See [`Filter`] for usage information.
     pub const fn document(mut self, document: bool) -> Self {
         self.types.document = document;
+        self
+    }
+
+    #[inline]
+    #[must_use]
+    /// Specifies the name of an attribute in the tags that must be dismissed.
+    ///
+    /// This matches only tag attributes that don't have any value, such as
+    /// `enabled` in
+    ///
+    /// ```html
+    /// <button enabled type="submit" />
+    /// ```
+    ///
+    /// See [`Filter`] for usage information.
+    pub fn except_attribute_name<N: Into<String>>(mut self, name: N) -> Self {
+        self.attrs.push(name.into(), None, false);
+        self
+    }
+
+    #[inline]
+    #[must_use]
+    /// Specifies the value of an attribute in the tags that must be dismissed.
+    ///
+    /// This matches only tag attributes that have the correct value for the
+    /// given name.
+    ///
+    /// See [`Filter`] for usage information.
+    pub fn except_attribute_value<N, V>(mut self, name: N, value: V) -> Self
+    where
+        N: Into<String>,
+        V: Into<String>,
+    {
+        self.attrs.push(name.into(), Some(value.into()), false);
+        self
+    }
+
+    #[inline]
+    #[must_use]
+    /// Specifies the tag name of the wanted tags.
+    ///
+    /// See [`Filter`] for usage information.
+    pub fn except_tag_name<N: Into<String>>(mut self, name: N) -> Self {
+        self.tags.push(name.into(), (), false);
         self
     }
 
