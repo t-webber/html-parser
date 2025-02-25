@@ -16,7 +16,7 @@ use crate::errors::safe_unreachable;
     clippy::derived_hash_with_manual_eq,
     reason = "hash on enum doesn't depend of variant data"
 )]
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Clone)]
 
 pub enum Attribute {
     /// Name of the attribute, when it doesn't have a value
@@ -149,7 +149,7 @@ impl fmt::Display for Attribute {
 /// }
 /// ```
 #[non_exhaustive]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Tag {
     /// Attributes of the tag. See [`Attribute`].
     attrs: Box<[Attribute]>,

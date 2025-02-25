@@ -45,22 +45,16 @@
 #![expect(clippy::blanket_clippy_restriction_lints, reason = "I want them all")]
 #![expect(clippy::multiple_inherent_impl, reason = "useful when lots of methods")]
 #![feature(coverage_attribute)]
+#![feature(trivial_bounds)]
 
 // All modules are private to prevent a breaking change after refactoring this
 // crate's structure.
 
 mod errors;
 mod filter;
+mod ownership;
 mod parse;
-pub mod prelude {
-    //! Main types of the API to export to external users
-    #![expect(clippy::pub_use, reason = "API")]
-
-    pub use crate::filter::types::Filter;
-    pub use crate::parse::parse_html;
-    pub use crate::types::html::Html;
-    pub use crate::types::tag::Tag;
-}
+pub mod prelude;
 mod types;
 
 /// A const equivalent of the [`Option::unwrap_or`] method.

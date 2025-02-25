@@ -13,11 +13,9 @@ fn handle_auto_closing(html: &str) -> String {
     let mut tag_name = String::new();
     let mut reading = false;
     let mut last_slash = false;
-    for ch in dbg!(html).chars() {
-        println!("[{ch}] {tag_name} | {output}");
+    for ch in html.chars() {
         if ch == '>' && last_slash {
             output.push_str("> </");
-            dbg!(&tag_name);
             output.push_str(&tag_name);
             output.push('>');
             tag_name.clear();
